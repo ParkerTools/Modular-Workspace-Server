@@ -39,6 +39,7 @@
 <a href="#minipc">Mini PC and home server</a>
 <a href="#vps">VPS</a>
 <a href="#pi">Raspberry Pi and ARM</a>
+<a href="#desktop">Windows and macOS</a>
 <a href="#compare">Side by side</a>
 </aside>
 <main id="main">
@@ -142,6 +143,51 @@ image that does not will fail at start with an exec format error rather than
 anything more helpful.</div>
 </section>
 
+<section id="desktop">
+<h2>Windows and macOS</h2>
+
+<p class="lead">You can run this on the machine you use every day. Both
+scripts detect which one you are on and say what it means before they touch
+anything, but the constraints are worth knowing first.</p>
+
+<h3>Windows</h3>
+<p>Use Docker Desktop with the WSL2 backend, and keep everything inside the
+Linux filesystem.</p>
+<div class="warning"><strong>Do not put your data under /mnt/c.</strong> Files
+on the Windows drive are reached through a translation layer: they are slow,
+and they lose Unix ownership entirely. Anything that checks file permissions,
+which is most of this list, behaves unpredictably. Put the stack in your WSL
+home directory instead.</div>
+<p>If you run the scripts from Git Bash rather than WSL, it rewrites arguments
+that look like paths, so a container path such as <code>/app/data</code> can
+arrive mangled. Prefix the command with <code>MSYS_NO_PATHCONV=1</code> when
+that happens. The generated scripts warn you when they detect Git Bash.</p>
+<p>Line endings matter too. The generated <code>install.sh</code> uses Unix
+line endings. If you open it in an editor that converts them, <code>sh</code>
+fails with an unhelpful error about a missing command.</p>
+
+<h3>macOS</h3>
+<p>Docker Desktop runs containers inside a Linux VM, which has two
+consequences.</p>
+<ul>
+<li><strong>Bind mounts are slower than on Linux.</strong> Noticeable on
+anything doing lots of small writes, which here means databases and OCR.</li>
+<li><strong>PUID and PGID do not work the way they do on Linux.</strong> The
+VM handles the mapping for you. Set them from <code>id -u</code> and
+<code>id -g</code> anyway, which on macOS is usually 501 rather than 1000, so
+that the same compose file behaves correctly if you ever move it to a Linux
+box.</li>
+</ul>
+<p>Also: macOS ships bash 3.2, which is from 2007. Everything generated here
+is POSIX <code>sh</code> for that reason. If you copy a snippet from another
+guide and it fails with a syntax error, that is usually why.</p>
+
+<div class="tip"><strong>Neither is a bad choice for trying this out.</strong>
+They are a poor choice for something that should stay up, because the stack
+stops when you close the laptop. Move it to a machine that stays on once you
+know which modules you keep.</div>
+</section>
+
 <section id="compare">
 <h2>Side by side</h2>
 
@@ -153,6 +199,8 @@ anything more helpful.</div>
 <tr><td>Mini PC</td><td>Low, second-hand</td><td>Power</td><td>Best value overall</td><td>Your upload speed, single disk</td></tr>
 <tr><td>VPS</td><td>Nothing</td><td>Monthly, storage billed extra</td><td>Sharing with people elsewhere</td><td>Storage cost grows with the archive</td></tr>
 <tr><td>Raspberry Pi</td><td>Low</td><td>Very little power</td><td>Small stacks, low draw</td><td>OCR speed, SD card wear</td></tr>
+<tr><td>Windows desktop</td><td>Nothing</td><td>Power</td><td>Trying it out</td><td>Keep data out of /mnt/c, and it stops when you shut down</td></tr>
+<tr><td>Mac</td><td>Nothing</td><td>Power</td><td>Trying it out</td><td>Slow bind mounts, and it stops when you close the lid</td></tr>
 </tbody>
 </table>
 </div>
@@ -177,7 +225,8 @@ against.</p>
 <div class="footcol"><b>Building</b><a href="generator.html">Generator</a><a href="setup.html">App setup</a><a href="access.html">Access</a></div>
 <div class="footcol"><b>Reference</b><a href="hardware.html">Hardware</a><a href="documentation.html">Docs</a><a href="faq.html">Help</a></div>
 </div>
-<div class="footbase">Every module entry is checked against upstream documentation before it is published. Where something could not be verified, the page says so. · PLACEHOLDER: licence and attribution line.</div>
+<div class="footsibling">Part of a pair. <a href="https://parkertools.github.io/Modular-Media-Server/">Modular Media Server</a> is the beginner project: Docker from scratch, one media stack, fewer moving parts. This is the intermediate one.</div>
+<div class="footbase">Every module entry is checked against upstream documentation before it is published. Where something could not be verified, the page says so. · MIT licensed. No affiliate links, no tracking, no analytics: this site collects nothing.</div>
 </div></footer>
 <script src="assets/site.js"></script>
 </body></html>
