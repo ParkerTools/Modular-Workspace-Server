@@ -2,6 +2,11 @@
 
 A friendly guide and Compose generator for a self-hosted work and document server.
 
+The second of a pair. [Modular Media Server](https://parkertools.github.io/Modular-Media-Server/)
+is the beginner project: Docker from scratch, one media stack. This is the
+intermediate one, and it assumes that ground is covered. Both share the design
+system, the generator design and the voice; every page here links back.
+
 This is the page skeleton. Structure, chrome, navigation and the design system
 are in place; the prose is not written yet. Every section body currently reads
 `PLACEHOLDER`.
@@ -20,7 +25,7 @@ are in place; the prose is not written yet. Every section body currently reads
 | `tools/content.py` | The written page bodies |
 | `tools/generator_core.js` | Generator logic, inlined into `generator.html` |
 | `tools/generator_ui.js` | Generator DOM code, inlined into `generator.html` |
-| `tools/emit-install-scripts.js` | Writes every `install.sh` variant for shellcheck |
+| `tools/emit-install-scripts.js` | Writes every generated script for shellcheck |
 | `.github/workflows/ci.yml` | Runs both suites, shellcheck, and a drift check |
 | `LICENSE` | MIT |
 | `.nojekyll` | Stops GitHub Pages running Jekyll over the files |
@@ -83,11 +88,31 @@ every storage layout: the compose file parses as YAML, every service has an
 image, every `depends_on` target exists, named volumes are declared, no two
 services claim the same host port, no database publishes one, every `${VAR}`
 resolves in `.env`, `.env.example` contains no real secret, blanks are written
-as `CHANGEME`, and two builds of the same state are byte identical. Plus the
-safety rules, the dependency behaviours, the ZIP structure walked entry by
-entry against its own CRCs, and the two UI rules: no `oninput` handler
-re-renders a pane containing an input, and no markup is ever assigned as a
-string.
+as `CHANGEME`, and two builds of the same state are byte identical.
+
+Then: every module builds on its own, all 300 module pairs are checked for host
+port collisions with TCP and UDP counted separately, alternatives are proved
+mutually exclusive, both generated scripts are proved to carry a byte-identical
+platform block, the ZIP is walked entry by entry against its own CRCs, and the
+two UI rules hold — no `oninput` handler re-renders a pane containing an input,
+and no markup is ever assigned as a string.
+
+## One tool per job
+
+Modules carry a `job`. Two modules cannot share one: picking a second wiki,
+forge or dashboard swaps the first out and takes its auto-added dependencies
+with it. `CORE.wouldReplace(state, id)` tells the UI what a pick will displace,
+which is what the badge in the module list shows.
+
+## The two scripts
+
+`install.sh` starts a generated stack. `install-arcane.sh` is standalone and
+installs Arcane on its own, so it can go on a machine before the rest exists.
+Both open with the same platform block: it separates WSL from plain Linux,
+warns about `/mnt/c`, Docker Desktop's VM and Git Bash path rewriting, and
+refuses to continue unless Docker, the Compose plugin and the daemon all
+answer. POSIX `sh` throughout, since macOS ships bash 3.2. CI shellchecks all
+24 generated variants.
 
 ## Editing pages
 
