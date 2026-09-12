@@ -136,9 +136,12 @@ works through that comparison with numbers.</p>
 <section id="stack">
 <h2>The stack at a glance</h2>
 
-<p>The modules fall into seven jobs. Within a job the options are genuine
-alternatives, so the generator lets you have one of each. Picking a second wiki
-swaps out the first rather than leaving you with two.</p>
+<p>Every module does one job, and seven of those jobs have more than one
+option. Within a job the options are genuine alternatives, so the generator
+gives you one: picking a second wiki swaps out the first rather than leaving
+you running two.</p>
+
+<p>These are the seven where you choose.</p>
 
 <div class="tbl">
 <table>
@@ -146,20 +149,25 @@ swaps out the first rather than leaving you with two.</p>
 <tbody>
 <tr><td>PDF tools</td><td>Stirling-PDF, BentoPDF</td><td>Stirling-PDF, unless you want zero server-side processing</td></tr>
 <tr><td>Document archive</td><td>Paperless-ngx, Docspell</td><td>Paperless-ngx</td></tr>
-<tr><td>Reading library</td><td>PdfDing</td><td>Only if you read long PDFs across devices</td></tr>
-<tr><td>Notes and wikis</td><td>BookStack, Wiki.js, Obsidian, Kiwix</td><td>BookStack</td></tr>
+<tr><td>Wiki</td><td>BookStack, Wiki.js</td><td>BookStack</td></tr>
 <tr><td>Code forge</td><td>Forgejo, Gogs</td><td>Forgejo</td></tr>
-<tr><td>File transfer</td><td>PairDrop, PsiTransfer, Zipline, Chibisafe</td><td>PairDrop for the house, PsiTransfer for links</td></tr>
+<tr><td>Link-based file sending</td><td>PsiTransfer, Zipline</td><td>PsiTransfer, unless you want ShareX support</td></tr>
+<tr><td>Full workspace</td><td>AppFlowy, Huly</td><td>Neither, unless you have the RAM for it</td></tr>
 <tr><td>Dashboard</td><td>Homarr, Dashy</td><td>Either. Pick by whether you want YAML or a GUI</td></tr>
 </tbody>
 </table>
 </div>
 
-<p>The rest sit on their own: OpenSign for signatures, Jitsi Meet for calls,
-Wekan for boards, CryptPad for encrypted collaborative editing, and AppFlowy
-and Huly for full Notion-style workspaces. Those last two are much larger
-than everything else here, and the <a href="hardware.html#ram">Hardware
-page</a> explains why they get their own warning.</p>
+<p>The rest have no alternative to choose between, so they simply coexist:
+PdfDing for reading, Obsidian for notes, Kiwix for offline reference, PairDrop
+for sending files across the room, Chibisafe for a gallery, CryptPad for
+encrypted editing, Calligra for office documents, Wekan for boards, OpenSign
+for signatures, Jitsi Meet for calls, and Arcane for managing Docker itself.
+You can run all of them alongside one pick from each row above.</p>
+
+<p>AppFlowy and Huly are much larger than everything else here, which is why
+the <a href="hardware.html#ram">Hardware page</a> gives them their own
+warning.</p>
 </section>
 
 <section id="start">
