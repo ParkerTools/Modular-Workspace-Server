@@ -487,9 +487,11 @@ var CORE = (function () {
               FORGEJO__database__USER: 'forgejo',
               FORGEJO__database__PASSWD: '${FORGEJO_DB_PASSWORD}'
             }),
-            volumes: [ctx.vol('forgejo', 'data') + ':/data',
-                      '/etc/timezone:/etc/timezone:ro',
-                      '/etc/localtime:/etc/localtime:ro']
+            // No /etc/timezone or /etc/localtime bind mounts. /etc/timezone is
+            // Debian-family only, and on a host without it Docker silently
+            // creates a directory where the container expects a file. TZ above
+            // already does the job on every platform.
+            volumes: [ctx.vol('forgejo', 'data') + ':/data']
           }
         };
       }
