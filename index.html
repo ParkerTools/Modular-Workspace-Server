@@ -36,6 +36,7 @@
 <aside class="toc" id="toc">
 <strong>On this page</strong>
 <a href="#what">What this is</a>
+<a href="#beginner">New to this? Start next door</a>
 <a href="#who">Who it is for</a>
 <a href="#stack">The stack at a glance</a>
 <a href="#start">Where to start</a>
@@ -55,6 +56,9 @@ opposite approach. Every container is a module you can add or leave out, and
 every module entry tells you what it needs, what it costs you, and what tends
 to go wrong with it.</p>
 
+<p>This is the second of two sites. The <a href="https://parkertools.github.io/Modular-Media-Server/">media server</a> is
+where to start if Docker is new to you; this one picks up after that.</p>
+
 <p>Three things are true of everything here:</p>
 
 <ul>
@@ -67,6 +71,42 @@ to go wrong with it.</p>
 <div class="tip"><strong>You do not need all of this.</strong> A useful
 workspace server is often three containers. The list is long because people
 want different things, not because you should run the whole list.</div>
+</section>
+
+<section id="beginner">
+<h2>New to this? Start next door</h2>
+
+<p class="lead">If you have not run a container before, do the media server
+first. It is the same design, the same voice, and the same generator, aimed at
+an easier problem.</p>
+
+<div class="card teal">
+<p><strong><a href="https://parkertools.github.io/Modular-Media-Server/">Modular Media Server</a> is the beginner
+project.</strong> Fewer services, one obvious goal, and a Docker introduction
+written for someone who has never opened a terminal for this. It covers
+Docker, Compose and Arcane from nothing.</p>
+<p>This site is the intermediate one. It assumes you already know what a volume
+is, and it spends its pages on the harder parts: apps that need two domains,
+apps that need a mail server, and apps that hand out a root shell if you
+publish them.</p>
+</div>
+
+<div class="tbl">
+<table>
+<thead><tr><th></th><th>Media server</th><th>Workspace server</th></tr></thead>
+<tbody>
+<tr><td>Level</td><td>Beginner</td><td>Intermediate</td></tr>
+<tr><td>Teaches Docker</td><td>Yes, from scratch</td><td>Assumes it, recaps in the <a href="guide.html">Guide</a></td></tr>
+<tr><td>Shape</td><td>One stack that does one job</td><td>Pick one tool per job, from seven jobs</td></tr>
+<tr><td>Hardest part</td><td>Getting the first container running</td><td>Domains, mail, and what must never be published</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>They share a generator design, so anything you learned about modules,
+storage layouts and secrets over there applies here unchanged. Both produce a
+compose file, a .env and an install script that checks what system you are on
+before it touches anything.</p>
 </section>
 
 <section id="who">
@@ -96,8 +136,9 @@ works through that comparison with numbers.</p>
 <section id="stack">
 <h2>The stack at a glance</h2>
 
-<p>The modules fall into seven jobs. Within a job, the options are genuine
-alternatives, so you generally want one of each rather than all of them.</p>
+<p>The modules fall into seven jobs. Within a job the options are genuine
+alternatives, so the generator lets you have one of each. Picking a second wiki
+swaps out the first rather than leaving you with two.</p>
 
 <div class="tbl">
 <table>
@@ -162,6 +203,7 @@ the container. They are still worth running. They are not worth publishing.
 <div class="footcol"><b>Building</b><a href="generator.html">Generator</a><a href="setup.html">App setup</a><a href="access.html">Access</a></div>
 <div class="footcol"><b>Reference</b><a href="hardware.html">Hardware</a><a href="documentation.html">Docs</a><a href="faq.html">Help</a></div>
 </div>
+<div class="footsibling">Part of a pair. <a href="https://parkertools.github.io/Modular-Media-Server/">Modular Media Server</a> is the beginner project: Docker from scratch, one media stack, fewer moving parts. This is the intermediate one.</div>
 <div class="footbase">Every module entry is checked against upstream documentation before it is published. Where something could not be verified, the page says so. · MIT licensed. No affiliate links, no tracking, no analytics: this site collects nothing.</div>
 </div></footer>
 <script src="assets/site.js"></script>
