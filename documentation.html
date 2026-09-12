@@ -36,6 +36,7 @@
 <aside class="toc" id="toc">
 <strong>On this page</strong>
 <a href="#how">How to read an entry</a>
+<a href="#docker">Docker management</a>
 <a href="#pdf">PDF tools</a>
 <a href="#archives">Document archives</a>
 <a href="#knowledge">Notes, wikis and libraries</a>
@@ -72,6 +73,45 @@ checked.</strong> If one is ever marked <span class="pill after">not
 checked</span>, that entry will carry no image name, no ports and no
 variables, and the generator will not write compose for it. An unverified
 entry states what is unknown rather than guessing at it.</div>
+</section>
+
+<section id="docker">
+<h2>Docker management</h2>
+
+<details class="app"><summary><b>Arcane</b> <span class="d">A web UI for Docker
+itself</span> <span class="pill first">checked 12 Sep 2026</span></summary>
+<div class="abody">
+<div class="fields"><dl>
+<dt>Image</dt><dd>ghcr.io/getarcaneapp/arcane</dd>
+<dt>Ports</dt><dd>3552, web UI</dd>
+<dt>Volumes</dt><dd>/app/data, plus the Docker socket</dd>
+<dt>Needs</dt><dd>The Docker socket. It cannot work without it</dd>
+<dt>Required vars</dt><dd>ENCRYPTION_KEY, JWT_SECRET, APP_URL</dd>
+<dt>Licence</dt><dd>BSD 3-Clause</dd>
+</dl></div>
+<p>Containers, images, volumes, networks and Compose projects, in a browser.
+The same tool the <a href="https://parkertools.github.io/Modular-Media-Server/">media server</a> introduces, which is why it is
+here: if you followed that site, this is already familiar.</p>
+<div class="warning"><strong>The image path moved.</strong> Every Arcane
+repository moved to the getarcaneapp organisation, and releases after 1.7.2
+come from <code>ghcr.io/getarcaneapp/arcane</code>. Guides still pointing at
+<code>ghcr.io/ofkm/arcane</code> are pinned to the old namespace. Contested:
+some recent guides use <code>ghcr.io/getarcaneapp/manager</code> instead. The
+organisation README names <code>arcane</code>, which is what the generator
+writes.</div>
+<div class="warning"><strong>Never publish it.</strong> Arcane holds the Docker
+socket by definition, which is root on the host in practical terms. Anyone who
+reaches port 3552 can run any container as root. It is excluded from generated
+proxy configuration unconditionally, unlike Homarr where the socket is
+optional.</div>
+<p>ENCRYPTION_KEY protects the credentials it stores and must be at least 32
+characters; the generator writes 64 hex characters for both keys. Change the
+default login before anything else.</p>
+<p>Arcane gets its own <code>install-arcane.sh</code> because it is the one
+thing here you would sensibly install before the rest of the stack exists. It
+runs the same platform checks as the main script.</p>
+</div>
+</details>
 </section>
 
 <section id="pdf">
@@ -720,7 +760,8 @@ guides still show all three of the old values.</div>
 <div class="footcol"><b>Building</b><a href="generator.html">Generator</a><a href="setup.html">App setup</a><a href="access.html">Access</a></div>
 <div class="footcol"><b>Reference</b><a href="hardware.html">Hardware</a><a href="documentation.html">Docs</a><a href="faq.html">Help</a></div>
 </div>
-<div class="footbase">Every module entry is checked against upstream documentation before it is published. Where something could not be verified, the page says so. · PLACEHOLDER: licence and attribution line.</div>
+<div class="footsibling">Part of a pair. <a href="https://parkertools.github.io/Modular-Media-Server/">Modular Media Server</a> is the beginner project: Docker from scratch, one media stack, fewer moving parts. This is the intermediate one.</div>
+<div class="footbase">Every module entry is checked against upstream documentation before it is published. Where something could not be verified, the page says so. · MIT licensed. No affiliate links, no tracking, no analytics: this site collects nothing.</div>
 </div></footer>
 <script src="assets/site.js"></script>
 </body></html>
