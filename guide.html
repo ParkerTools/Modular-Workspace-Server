@@ -122,6 +122,13 @@ your own user, which you can find with <code>id -u</code> and
 <code>id -g</code>. If an app starts and then immediately reports that it
 cannot write to its data directory, this is almost always why.</p>
 
+<div class="warning"><strong>1000 is a Linux assumption.</strong> The first
+user on most Linux systems is 1000, which is why every guide uses it. On macOS
+the first user is usually 501, and on a NAS the vendor may use something else
+again. Run <code>id -u</code> and <code>id -g</code> on the machine that will
+host the stack rather than copying the number from anywhere, including from
+this site.</div>
+
 <div class="tip"><strong>Back up the folder, not the container.</strong> If
 your compose file and your bind-mount folders are backed up, you can rebuild
 the whole stack on a new machine. Databases want a proper dump rather than a
