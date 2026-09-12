@@ -180,6 +180,10 @@ for (const [preset, layout] of combos) {
   const files = CORE.buildFiles(st);
   for (const f of files) {
     if (f.name === '.env' || f.name === '.env.example') continue;
+    // install-arcane.sh is a standalone installer: it writes its own .env next
+    // to its own compose file, so its variables are not the stack's. It gets a
+    // dedicated self-containment check below instead of an exemption.
+    if (f.name === 'install-arcane.sh') continue;
     const refs = [...f.body.matchAll(/\$\{([A-Z0-9_]+)\}/g)].map(m => m[1]);
     for (const r of new Set(refs)) {
       assert(defined.has(r), `${tag}: \${${r}} in ${f.name} is defined in .env`);
@@ -190,6 +194,65 @@ for (const [preset, layout] of combos) {
     if (!/^[A-Z0-9_]+=/.test(line)) continue;
     const [k, ...rest] = line.split('=');
     assert(rest.join('=').length > 0, `${tag}: ${k} has a value in .env`);
+  }
+}
+
+/* ---------- the standalone Arcane installer is self-contained ---------- */
+
+console.log('Arcane installer');
+{
+  const st = stateFor('usual', 'bind');
+  CORE.add(st, 'arcane', 'user');
+  const sh = CORE.buildFiles(st).find(f => f.name === 'install-arcane.sh');
+  assert(!!sh, 'selecting Arcane emits install-arcane.sh');
+  assert(!CORE.buildFiles(stateFor('small', 'bind')).some(f => f.name === 'install-arcane.sh'),
+    'it is not emitted when Arcane is not selected');
+
+  // every variable its compose heredoc uses is written by its own printf
+  const refs = [...new Set([...sh.body.matchAll(/\$\{([A-Z0-9_]+)\}/g)].map(m => m[1]))];
+  assert(refs.length > 0, 'the Arcane compose references variables');
+  for (const r of refs) {
+    assert(new RegExp(`${r}=%s`).test(sh.body),
+      `install-arcane.sh writes ${r} into its own .env`);
+  }
+  assert(/chmod 600 .env/.test(sh.body), 'it locks down the .env it writes');
+  assert(/docker\.sock/.test(sh.body) && /root/.test(sh.body),
+    'it says plainly what the Docker socket means');
+}
+
+/* ---------- both scripts run the same platform checks ---------- */
+
+console.log('Platform checks');
+{
+  const st = stateFor('usual', 'bind');
+  CORE.add(st, 'arcane', 'user');
+  const main = CORE.buildInstallSh(st);
+  const arcane = CORE.buildArcaneSh(st);
+
+  // the block is shared, so a reader gets the same checks either way
+  const blockOf = t => t.slice(t.indexOf('MWS_OS="unknown"'), t.indexOf('\n\n', t.indexOf('docker info')));
+  assert(blockOf(main) === blockOf(arcane),
+    'both scripts carry a byte-identical platform block');
+
+  for (const script of [['install.sh', main], ['install-arcane.sh', arcane]]) {
+    const [name, body] = script;
+    // the branch must both exist and actually set the platform
+    for (const os of ['wsl', 'macos', 'gitbash', 'linux']) {
+      assert(new RegExp('MWS_OS="' + os + '"').test(body),
+        `${name} sets MWS_OS for ${os}`);
+      assert(new RegExp('^  ' + os + '\\)$', 'm').test(body) || os === 'wsl',
+        `${name} has a defaults branch for ${os}`);
+    }
+    assert(/MWS_DEFAULT_BASE=/.test(body), `${name} sets a platform default path`);
+    for (const warn of ['/mnt/c', 'Docker Desktop', 'MSYS_NO_PATHCONV']) {
+      assert(body.includes(warn), `${name} carries the ${warn} warning`);
+    }
+    assert(/grep -qi microsoft \/proc\/version/.test(body),
+      `${name} distinguishes WSL from plain Linux`);
+    assert(/command -v docker/.test(body), `${name} checks docker is installed`);
+    assert(/docker compose version/.test(body), `${name} checks the compose plugin`);
+    assert(/docker info/.test(body), `${name} checks the daemon is responding`);
+    assert(!/\[\[/.test(body), `${name} avoids bash-only [[ ]]`);
   }
 }
 
@@ -234,22 +297,31 @@ console.log('Safety');
       `${m.name} is named in the exclusion comment`);
   }
 
-  // the socket holder is excluded too, and only when the socket is mounted
+  // Homarr's socket is optional, so it is only excluded when mounted
   assert(!/^homarr\.example\.com \{/m.test(caddy),
     'Homarr is excluded while the Docker socket is mounted');
   const stNoSock = stateFor('everything', 'bind', { dockerSocket: false });
   assert(/^homarr\.example\.com \{/m.test(CORE.buildCaddyfile(stNoSock)),
     'Homarr is proxied when the socket is not mounted');
-  assert(!CORE.buildCompose(stNoSock).includes('docker.sock'),
-    'no Docker socket in compose unless asked for');
   assert(compose.includes('/var/run/docker.sock:/var/run/docker.sock:ro'),
-    'the Docker socket is mounted read only when asked for');
+    'Homarr gets the socket read only when asked for');
 
-  // upstream-only modules never get a compose service
+  // Arcane's socket is not optional, so it is excluded either way
+  assert(!/^arcane\.example\.com \{/m.test(CORE.buildCaddyfile(stNoSock)),
+    'Arcane is never proxied, socket toggle or not');
+  const noArcane = CORE.newState();
+  CORE.applyPreset(noArcane, 'usual');
+  assert(!CORE.buildCompose(noArcane).includes('docker.sock'),
+    'no Docker socket anywhere unless a module that needs one is selected');
+
+  // upstream-only modules never get a compose service, each checked alone
   for (const m of CORE.MODULES.filter(m => m.deploy === 'upstream')) {
-    assert(!new RegExp(`^  ${m.id}:`, 'm').test(compose),
+    const solo = CORE.newState();
+    CORE.add(solo, m.id, 'user');
+    solo.domain = 'example.com';
+    assert(!new RegExp(`^  ${m.id}:`, 'm').test(CORE.buildCompose(solo)),
       `${m.name} gets no invented compose service`);
-    assert(CORE.buildReadme(st).includes(m.upstreamUrl),
+    assert(CORE.buildReadme(solo).includes(m.upstreamUrl),
       `${m.name} links to its upstream instructions in the README`);
   }
 
@@ -262,14 +334,102 @@ console.log('Safety');
   blank.sandboxDomain = '';
   assert(CORE.validate(blank).errors.some(e => /sandbox/i.test(e)),
     'a missing CryptPad sandbox domain is a blocking error');
+}
 
-  // overlaps warn, never block
-  const overlap = CORE.newState();
-  CORE.add(overlap, 'bookstack', 'user');
-  CORE.add(overlap, 'wikijs', 'user');
-  const ov = CORE.validate(overlap);
-  assert(ov.warnings.some(w => /same job/.test(w)), 'two wikis produce a warning');
-  assert(!ov.errors.some(e => /same job/.test(e)), 'two wikis do not block');
+/* ---------- alternatives are mutually exclusive ---------- */
+
+console.log('One per job');
+{
+  // picking a second tool for the same job swaps the first out
+  const st = CORE.newState();
+  CORE.add(st, 'bookstack', 'user');
+  assert(st.chosen.bookstack && st.chosen.mariadb, 'BookStack brings MariaDB');
+  CORE.add(st, 'wikijs', 'user');
+  assert(!st.chosen.bookstack, 'the first wiki is dropped');
+  assert(st.chosen.wikijs, 'the second wiki is selected');
+  assert(!st.chosen.mariadb, 'the dropped wiki takes its auto dependency with it');
+  assert(st.chosen.postgres === 'auto', 'the new wiki brings its own');
+
+  // wouldReplace tells the UI what is about to go
+  const peek = CORE.newState();
+  CORE.add(peek, 'forgejo', 'user');
+  assert(CORE.wouldReplace(peek, 'gogs').indexOf('forgejo') !== -1,
+    'wouldReplace names the module that will be swapped out');
+  assert(CORE.wouldReplace(peek, 'homarr').length === 0,
+    'a different job replaces nothing');
+
+  // no preset can contain two of a job
+  for (const name of Object.keys(CORE.PRESETS)) {
+    const ps = CORE.newState();
+    CORE.applyPreset(ps, name);
+    const jobs = {};
+    let clash = null;
+    for (const m of CORE.selectedModules(ps)) {
+      if (m.support) continue;
+      if (jobs[m.job]) clash = `${jobs[m.job]} and ${m.name}`;
+      jobs[m.job] = m.name;
+    }
+    assert(!clash, `preset ${name} holds one module per job`, clash || '');
+    assert(CORE.validate(ps).errors.filter(e => /same job/.test(e)).length === 0,
+      `preset ${name} raises no same-job error`);
+  }
+
+  // exhaustive: every pair, the way the media site does it
+  const ids = CORE.MODULES.filter(m => !m.support).map(m => m.id);
+  let pairs = 0;
+  for (let i = 0; i < ids.length; i++) {
+    for (let j = i + 1; j < ids.length; j++) {
+      pairs++;
+      const both = CORE.newState();
+      CORE.add(both, ids[i], 'user');
+      CORE.add(both, ids[j], 'user');
+      const a = CORE.BY_ID[ids[i]], b = CORE.BY_ID[ids[j]];
+      if (a.job === b.job) {
+        assert(!both.chosen[ids[i]] && both.chosen[ids[j]],
+          `${a.name} + ${b.name}: same job, second replaces first`);
+        continue;
+      }
+      assert(both.chosen[ids[i]] && both.chosen[ids[j]],
+        `${a.name} + ${b.name}: both survive`);
+      both.domain = 'example.com';
+      both.sandboxDomain = 'pad-sandbox.example.com';
+
+      // TCP and UDP on the same number are not a collision
+      const doc = parseYaml(CORE.buildCompose(both));
+      if (!doc.services) {
+        // legitimate when both modules install from their own repositories
+        assert(a.deploy === 'upstream' && b.deploy === 'upstream',
+          `${a.name} + ${b.name}: an empty compose means both are upstream-only`);
+        continue;
+      }
+      const seen = new Map();
+      for (const [name, svc] of Object.entries(doc.services)) {
+        for (const p of (svc.ports || [])) {
+          const str = String(p);
+          const key = str.split(':')[0] + (/\/udp$/.test(str) ? '/udp' : '/tcp');
+          assert(!seen.has(key),
+            `${a.name} + ${b.name}: host port ${key} claimed twice`,
+            seen.has(key) ? `${seen.get(key)} and ${name}` : '');
+          seen.set(key, name);
+        }
+      }
+    }
+  }
+  console.log(`  ${pairs} pairs checked`);
+
+  // every module builds on its own
+  for (const id of ids) {
+    const solo = CORE.newState();
+    CORE.add(solo, id, 'user');
+    solo.domain = 'example.com';
+    solo.sandboxDomain = 'pad-sandbox.example.com';
+    try {
+      parseYaml(CORE.buildCompose(solo));
+      ok();
+    } catch (e) {
+      fail(`${id} builds alone`, e.message);
+    }
+  }
 }
 
 /* ---------- .env.example leaks nothing ---------- */
@@ -290,15 +450,33 @@ console.log('Secret hygiene');
   const values = specs.map(s => st.secrets[s.key]);
   assert(new Set(values).size === values.length, 'every secret value is unique');
 
-  // required lengths that upstream actually enforces
-  assert(/^[0-9a-f]{64}$/.test(st.secrets.HOMARR_SECRET_ENCRYPTION_KEY),
-    'Homarr key is 64 hex characters');
-  assert(st.secrets.ZIPLINE_CORE_SECRET.length > 32,
-    'Zipline secret is longer than 32 characters');
-  assert(/^base64:/.test(st.secrets.BOOKSTACK_APP_KEY),
-    'BookStack APP_KEY uses the base64: form');
-  assert(Buffer.from(st.secrets.BOOKSTACK_APP_KEY.slice(7), 'base64').length === 32,
-    'BookStack APP_KEY decodes to 32 bytes');
+  // Required formats upstream actually enforces. Each module is selected
+  // explicitly, because the presets now hold one module per job and cannot
+  // contain every alternative at once.
+  const fmt = [
+    ['homarr', 'HOMARR_SECRET_ENCRYPTION_KEY', v => /^[0-9a-f]{64}$/.test(v),
+      'Homarr key is 64 hex characters'],
+    ['arcane', 'ARCANE_ENCRYPTION_KEY', v => v.length >= 32,
+      'Arcane encryption key is at least 32 characters'],
+    ['arcane', 'ARCANE_JWT_SECRET', v => v.length >= 32,
+      'Arcane JWT secret is at least 32 characters'],
+    ['zipline', 'ZIPLINE_CORE_SECRET', v => v.length > 32,
+      'Zipline secret is longer than 32 characters'],
+    ['bookstack', 'BOOKSTACK_APP_KEY', v => /^base64:/.test(v),
+      'BookStack APP_KEY uses the base64: form'],
+    ['bookstack', 'BOOKSTACK_APP_KEY',
+      v => Buffer.from(v.slice(7), 'base64').length === 32,
+      'BookStack APP_KEY decodes to 32 bytes'],
+    ['opensign', 'OPENSIGN_MASTER_KEY', v => v.length === 12,
+      'OpenSign master key is the documented 12 characters']
+  ];
+  for (const [mod, key, test, name] of fmt) {
+    const one = CORE.newState();
+    CORE.add(one, mod, 'user');
+    const v = one.secrets[key];
+    assert(v !== undefined, `${name}: the secret exists`);
+    if (v !== undefined) assert(test(v), name, v.slice(0, 12) + '...');
+  }
 
   // blanks become CHANGEME, never a guess
   const blankField = stateFor('everything', 'bind');
