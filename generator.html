@@ -870,6 +870,43 @@ var CORE = (function () {
               'Plain HTTP produces camera and microphone errors. Port 8000 exists for proxied setups only.']
     },
 
+    /* --- docker management --- */
+    {
+      id: 'arcane', name: 'Arcane', cat: 'Docker management', job: 'docker-ui',
+      deploy: 'service', image: 'ghcr.io/getarcaneapp/arcane:latest',
+      port: 3552, host: 3552,
+      desc: 'A web UI for Docker itself: containers, images, volumes, Compose projects.',
+      secrets: [{ key: 'ARCANE_ENCRYPTION_KEY', kind: 'hex64' },
+                { key: 'ARCANE_JWT_SECRET', kind: 'hex64' }],
+      dockerSocket: true, alwaysSocket: true, ownScript: 'install-arcane.sh',
+      notes: ['Arcane needs the Docker socket to do its job at all, so it cannot be run without it. That is root on the host in practical terms, which is why it is never written into the proxy config.',
+              'Image path changed. All Arcane repositories moved to the getarcaneapp organisation, and releases after 1.7.2 come from ghcr.io/getarcaneapp/arcane. Guides pointing at ghcr.io/ofkm/arcane are pinned to an old namespace.',
+              'Contested: some recent guides use ghcr.io/getarcaneapp/manager. The organisation README names ghcr.io/getarcaneapp/arcane, which is what this uses.',
+              'ENCRYPTION_KEY protects stored credentials and must be at least 32 characters. Both keys are generated at 64 hex characters here.',
+              'It has its own install script so you can put it on a machine before any of the rest of this exists. That is the beginner path.'],
+      compose: function (ctx) {
+        return {
+          arcane: {
+            image: this.image,
+            restart: 'unless-stopped',
+            ports: [ctx.hostPort(this) + ':' + this.port],
+            environment: envList({
+              APP_URL: ctx.urlFor('arcane'),
+              PUID: '${PUID}', PGID: '${PGID}', TZ: '${TZ}',
+              ENCRYPTION_KEY: '${ARCANE_ENCRYPTION_KEY}',
+              JWT_SECRET: '${ARCANE_JWT_SECRET}'
+            }),
+            volumes: ['/var/run/docker.sock:/var/run/docker.sock',
+                      ctx.vol('arcane', 'data') + ':/app/data'],
+            healthcheck: {
+              test: ['CMD-SHELL', 'curl -fsS http://localhost:3552/api/health >/dev/null || exit 1'],
+              interval: '10s', timeout: '3s', retries: 5, start_period: '15s'
+            }
+          }
+        };
+      }
+    },
+
     /* --- dashboards --- */
     {
       id: 'homarr', name: 'Homarr', cat: 'Dashboards', job: 'dashboard',
@@ -924,7 +961,20 @@ var CORE = (function () {
     small: { label: 'Small', ids: ['bookstack', 'forgejo', 'pairdrop', 'dashy'] },
     usual: { label: 'The usual one', ids: ['bookstack', 'forgejo', 'paperless', 'stirling', 'psitransfer', 'homarr'] },
     large: { label: 'Large', ids: ['bookstack', 'forgejo', 'paperless', 'stirling', 'pdfding', 'psitransfer', 'pairdrop', 'cryptpad', 'wekan', 'homarr', 'kiwix'] },
-    everything: { label: 'Everything', ids: MODULES.filter(function (m) { return !m.support; }).map(function (m) { return m.id; }) }
+    // One of each job. "Everything" is no longer selectable, because the
+    // alternatives exclude each other.
+    everything: {
+      label: 'One of each',
+      ids: (function () {
+        var seen = {}, out = [];
+        MODULES.forEach(function (m) {
+          if (m.support || seen[m.job]) return;
+          seen[m.job] = true;
+          out.push(m.id);
+        });
+        return out;
+      })()
+    }
   };
 
   /* ---------- state ---------- */
@@ -957,9 +1007,23 @@ var CORE = (function () {
      they appeared. A module the user picked themselves stays 'user' even if
      something else also requires it. */
 
+  // Which already-selected modules would be dropped by adding this one.
+  // Alternatives are mutually exclusive: one per job.
+  function wouldReplace(st, id) {
+    var m = BY_ID[id];
+    if (!m || m.support || !m.job) return [];
+    return selectedIds(st).filter(function (other) {
+      var o = BY_ID[other];
+      return other !== id && !o.support && o.job === m.job;
+    });
+  }
+
   function add(st, id, how) {
     var m = BY_ID[id];
     if (!m) throw new Error('unknown module: ' + id);
+    // One per job. Picking BookStack when Wiki.js is selected swaps them
+    // rather than leaving you with two wikis.
+    wouldReplace(st, id).forEach(function (other) { remove(st, other); });
     if (st.chosen[id] === 'user') {
       // already an explicit choice; never downgrade it to auto
     } else {
@@ -1192,7 +1256,7 @@ var CORE = (function () {
     selectedModules(st).forEach(function (m) {
       if (m.neverExpose) {
         out.push({ id: m.id, name: m.name, why: 'no authentication by default, and the web interface includes a terminal with passwordless sudo' });
-      } else if (m.dockerSocket && st.dockerSocket) {
+      } else if (m.dockerSocket && (m.alwaysSocket || st.dockerSocket)) {
         out.push({ id: m.id, name: m.name, why: 'you mounted the Docker socket into it, which is root on the host in practical terms' });
       }
     });
@@ -1214,7 +1278,7 @@ var CORE = (function () {
     selectedModules(st).forEach(function (m) {
       if (m.deploy !== 'service' || m.support) return;
       if (m.neverExpose) return;
-      if (m.dockerSocket && st.dockerSocket) return;
+      if (m.dockerSocket && (m.alwaysSocket || st.dockerSocket)) return;
       var host = st.domain ? m.id + '.' + st.domain : 'CHANGEME';
       out += host + ' {\n    reverse_proxy ' + m.id + ':' + m.port + '\n}\n\n';
     });
@@ -1288,12 +1352,13 @@ var CORE = (function () {
       });
     });
 
-    // overlapping jobs are a warning, never a block
+    // alternatives are mutually exclusive, so two of a job should be
+    // unreachable. If it ever happens it is a bug, not a preference.
     var byJob = {};
     mods.forEach(function (m) { (byJob[m.job] = byJob[m.job] || []).push(m.name); });
     Object.keys(byJob).forEach(function (job) {
       if (byJob[job].length > 1) {
-        warnings.push(byJob[job].join(' and ') + ' do the same job. Running both works, but you probably want one.');
+        errors.push(byJob[job].join(' and ') + ' both do the same job and cannot run together.');
       }
     });
 
@@ -1371,21 +1436,140 @@ var CORE = (function () {
     return out;
   }
 
-  /* ---------- install.sh ----------
-     POSIX sh, no bash 4 syntax, because macOS ships bash 3.2. */
+  /* ---------- shared script preamble ----------
+     Both generated scripts start with exactly the same block, so the checks a
+     reader gets do not depend on which script they happened to run. The test
+     suite compares the two byte for byte.
+
+     POSIX sh throughout: macOS ships bash 3.2, so no associative arrays, no
+     mapfile, no ${var^^}, and no [[ ]]. */
+
+  function platformPreamble(title) {
+    return '#!/bin/sh\n' +
+      '# ' + title + '\n' +
+      '# Generated by Modular Workspace Server.\n' +
+      'set -eu\n' +
+      '\n' +
+      'say() { printf "%s\\n" "$*"; }\n' +
+      'die() { printf "%s\\n" "$*" >&2; exit 1; }\n' +
+      '\n' +
+      'MWS_OS="unknown"\n' +
+      'case "$(uname -s 2>/dev/null || echo unknown)" in\n' +
+      '  Linux)\n' +
+      '    if grep -qi microsoft /proc/version 2>/dev/null; then\n' +
+      '      MWS_OS="wsl"\n' +
+      '    else\n' +
+      '      MWS_OS="linux"\n' +
+      '    fi\n' +
+      '    ;;\n' +
+      '  Darwin) MWS_OS="macos" ;;\n' +
+      '  MINGW*|MSYS*|CYGWIN*) MWS_OS="gitbash" ;;\n' +
+      'esac\n' +
+      '\n' +
+      'MWS_HOME="${HOME:-/root}"\n' +
+      'case "$MWS_OS" in\n' +
+      '  linux)\n' +
+      '    MWS_DEFAULT_BASE="/srv/workspace"\n' +
+      '    ;;\n' +
+      '  wsl)\n' +
+      '    MWS_DEFAULT_BASE="$MWS_HOME/workspace"\n' +
+      '    say "WSL detected. Keep your data inside the Linux filesystem."\n' +
+      '    say "Paths under /mnt/c are slow and lose Unix permissions, which"\n' +
+      '    say "breaks anything that checks file ownership."\n' +
+      '    ;;\n' +
+      '  macos)\n' +
+      '    MWS_DEFAULT_BASE="$MWS_HOME/workspace"\n' +
+      '    say "macOS detected. Docker Desktop runs containers in a VM, so bind"\n' +
+      '    say "mounts are slower than on Linux and PUID and PGID are ignored."\n' +
+      '    ;;\n' +
+      '  gitbash)\n' +
+      '    MWS_DEFAULT_BASE="$MWS_HOME/workspace"\n' +
+      '    say "Git Bash detected. It rewrites arguments that look like paths."\n' +
+      '    say "If a container path arrives mangled, prefix the command with"\n' +
+      '    say "MSYS_NO_PATHCONV=1."\n' +
+      '    ;;\n' +
+      '  *)\n' +
+      '    MWS_DEFAULT_BASE="$MWS_HOME/workspace"\n' +
+      '    say "Could not identify this system. Continuing with generic defaults."\n' +
+      '    ;;\n' +
+      'esac\n' +
+      '\n' +
+      'command -v docker >/dev/null 2>&1 || die "docker is not on PATH. Install Docker first."\n' +
+      'docker compose version >/dev/null 2>&1 || \\\n' +
+      '  die "The docker compose plugin is missing. Install it, or upgrade Docker."\n' +
+      'docker info >/dev/null 2>&1 || \\\n' +
+      '  die "Docker is installed but not responding. Is the daemon running?"\n' +
+      '\n';
+  }
+
+  /* ---------- install-arcane.sh ----------
+     Standalone on purpose. Arcane manages Docker itself, so it is the thing
+     you can put on a machine before the rest of this exists. */
+
+  function buildArcaneSh(st) {
+    var out = platformPreamble('install-arcane.sh - Arcane, a web UI for Docker');
+    out += 'ARCANE_DIR="${1:-$MWS_DEFAULT_BASE/arcane}"\n';
+    out += 'say "Installing Arcane into $ARCANE_DIR"\n';
+    out += 'mkdir -p "$ARCANE_DIR/data"\n';
+    out += 'cd "$ARCANE_DIR"\n\n';
+    out += 'gen_secret() {\n';
+    out += '  if command -v openssl >/dev/null 2>&1; then\n';
+    out += '    openssl rand -hex 32\n';
+    out += '  elif [ -r /dev/urandom ]; then\n';
+    out += '    od -An -tx1 -N32 /dev/urandom | tr -d " \\n"\n';
+    out += '  else\n';
+    out += '    die "No openssl and no /dev/urandom. Cannot generate a key safely."\n';
+    out += '  fi\n';
+    out += '}\n\n';
+    out += 'if [ -f .env ]; then\n';
+    out += '  say "Keeping the existing .env. Delete it first if you want new keys."\n';
+    out += 'else\n';
+    out += '  # ENCRYPTION_KEY protects stored credentials and must be at least 32\n';
+    out += '  # characters. Both are written at 64 hex characters.\n';
+    out += '  printf "ENCRYPTION_KEY=%s\\nJWT_SECRET=%s\\nPUID=%s\\nPGID=%s\\n" \\\n';
+    out += '    "$(gen_secret)" "$(gen_secret)" "$(id -u)" "$(id -g)" > .env\n';
+    out += '  chmod 600 .env\n';
+    out += '  say "Wrote .env. Back it up: losing ENCRYPTION_KEY means re-entering every stored credential."\n';
+    out += 'fi\n\n';
+    out += 'cat > docker-compose.yml <<\'COMPOSE\'\n';
+    out += 'services:\n';
+    out += '  arcane:\n';
+    out += '    image: ghcr.io/getarcaneapp/arcane:latest\n';
+    out += '    container_name: arcane\n';
+    out += '    restart: unless-stopped\n';
+    out += '    ports:\n';
+    out += '      - "3552:3552"\n';
+    out += '    environment:\n';
+    out += '      - APP_URL=http://localhost:3552\n';
+    out += '      - PUID=${PUID}\n';
+    out += '      - PGID=${PGID}\n';
+    out += '      - ENCRYPTION_KEY=${ENCRYPTION_KEY}\n';
+    out += '      - JWT_SECRET=${JWT_SECRET}\n';
+    out += '    volumes:\n';
+    out += '      - /var/run/docker.sock:/var/run/docker.sock\n';
+    out += '      - ./data:/app/data\n';
+    out += 'COMPOSE\n\n';
+    out += 'say ""\n';
+    out += 'say "Arcane gets the Docker socket, which is root on this host in"\n';
+    out += 'say "practical terms. Anyone who reaches port 3552 can run any"\n';
+    out += 'say "container as root. Do not publish it. Reach it over a VPN."\n';
+    out += 'say ""\n';
+    out += 'docker compose up -d\n';
+    out += 'say "Arcane is starting on http://localhost:3552"\n';
+    out += 'say "Change the default password before you do anything else."\n';
+    return out;
+  }
+
+  /* ---------- install.sh ---------- */
 
   function buildInstallSh(st) {
     var ctx = makeCtx(st);
-    var out = '#!/bin/sh\n';
-    out += '# install.sh - generated by Modular Workspace Server\n';
-    out += '# POSIX sh on purpose: macOS ships bash 3.2, so no associative arrays,\n';
-    out += '# no mapfile, no ${var^^}.\n';
-    out += 'set -eu\n\n';
-    out += 'if ! command -v docker >/dev/null 2>&1; then\n';
-    out += '  echo "docker not found on PATH" >&2\n  exit 1\nfi\n\n';
+    var out = platformPreamble('install.sh - start your workspace server');
+    out += 'say "Platform: $MWS_OS. Storage layout: ' + ctx.layout.label.toLowerCase() + '."\n';
+    out += 'say "Usual data location on this system: $MWS_DEFAULT_BASE"\n\n';
 
     if (!ctx.layout.named) {
-      out += 'echo "Creating storage directories"\n';
+      out += 'say "Creating storage directories"\n';
       var dirs = {};
       selectedModules(st).forEach(function (m) {
         if (m.deploy !== 'service') return;
@@ -1425,16 +1609,15 @@ var CORE = (function () {
     }
 
     out += 'if [ ! -f .env ]; then\n';
-    out += '  echo "No .env found. Copy .env.example to .env and fill it in first." >&2\n';
-    out += '  exit 1\nfi\n\n';
+    out += '  die "No .env found. Copy .env.example to .env and fill it in first."\nfi\n\n';
     out += 'if grep -q "^[A-Z_]*=CHANGEME$" .env; then\n';
-    out += '  echo "Warning: .env still contains CHANGEME values:" >&2\n';
+    out += '  say "Warning: .env still contains CHANGEME values:" >&2\n';
     out += '  grep -n "=CHANGEME$" .env >&2\n';
     out += 'fi\n\n';
-    out += 'echo "Starting the stack"\n';
+    out += 'say "Starting the stack"\n';
     out += 'docker compose up -d\n';
-    out += 'echo\n';
-    out += 'echo "Running. Check progress with: docker compose logs -f"\n';
+    out += 'say ""\n';
+    out += 'say "Running. Check progress with: docker compose logs -f"\n';
     return out;
   }
 
@@ -1449,6 +1632,7 @@ var CORE = (function () {
       { name: 'README.md', body: buildReadme(st) },
       { name: 'install.sh', body: buildInstallSh(st) }
     ];
+    if (st.chosen.arcane) files.push({ name: 'install-arcane.sh', body: buildArcaneSh(st) });
     if (st.useProxy) files.push({ name: 'Caddyfile', body: buildCaddyfile(st) });
     var pg = dbInit(st, 'postgres');
     if (pg) files.push({ name: 'db-init/postgres/init.sh', body: pg });
@@ -1533,7 +1717,8 @@ var CORE = (function () {
     makeCtx: makeCtx, buildCompose: buildCompose, buildEnv: buildEnv,
     buildEnvExample: buildEnvExample, buildGitignore: buildGitignore,
     buildReadme: buildReadme, buildCaddyfile: buildCaddyfile,
-    buildInstallSh: buildInstallSh, dbInit: dbInit,
+    buildInstallSh: buildInstallSh, buildArcaneSh: buildArcaneSh,
+    platformPreamble: platformPreamble, wouldReplace: wouldReplace, dbInit: dbInit,
     proxyExclusions: proxyExclusions,
     validate: validate, buildFiles: buildFiles,
     zipStore: zipStore, crc32: crc32, toYaml: toYaml
@@ -1613,6 +1798,10 @@ if (typeof module !== 'undefined' && module.exports) module.exports = CORE;
         '. These are required by something you picked. Remove the thing that needs them and they go too.'));
       host.appendChild(note);
     }
+
+    var jobs = el('p', 'gen-note',
+      'These are alternatives, so you get one per job. Picking a second wiki, forge or dashboard swaps the first one out rather than leaving you running both.');
+    host.appendChild(jobs);
   }
 
   function moduleRow(m) {
@@ -1626,6 +1815,13 @@ if (typeof module !== 'undefined' && module.exports) module.exports = CORE;
     var body = el('div', 'gen-modbody');
     var head = el('div', 'gen-modhead');
     head.appendChild(el('b', null, m.name));
+    if (!st.chosen[m.id]) {
+      var swaps = CORE.wouldReplace(st, m.id);
+      if (swaps.length) {
+        head.appendChild(el('span', 'pill after',
+          'replaces ' + swaps.map(function (id) { return CORE.BY_ID[id].name; }).join(', ')));
+      }
+    }
     if (st.chosen[m.id] === 'auto') head.appendChild(el('span', 'pill after', 'auto'));
     if (m.deploy === 'upstream') head.appendChild(el('span', 'pill first', 'own installer'));
     if (m.neverExpose) head.appendChild(el('span', 'pill after', 'never publish'));
@@ -1927,6 +2123,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = CORE;
 <div class="footcol"><b>Building</b><a href="generator.html">Generator</a><a href="setup.html">App setup</a><a href="access.html">Access</a></div>
 <div class="footcol"><b>Reference</b><a href="hardware.html">Hardware</a><a href="documentation.html">Docs</a><a href="faq.html">Help</a></div>
 </div>
+<div class="footsibling">Part of a pair. <a href="https://parkertools.github.io/Modular-Media-Server/">Modular Media Server</a> is the beginner project: Docker from scratch, one media stack, fewer moving parts. This is the intermediate one.</div>
 <div class="footbase">Every module entry is checked against upstream documentation before it is published. Where something could not be verified, the page says so. · MIT licensed. No affiliate links, no tracking, no analytics: this site collects nothing.</div>
 </div></footer>
 <script src="assets/site.js"></script>
