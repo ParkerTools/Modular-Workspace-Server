@@ -96,12 +96,105 @@ console.log('Publishing hygiene');
   assert(fs.existsSync(path.join(ROOT, 'LICENSE')), 'LICENSE exists');
   assert(/MIT License/.test(fs.readFileSync(path.join(ROOT, 'LICENSE'), 'utf8')),
     'LICENSE is the MIT text');
+  // the sibling link is shared chrome and must point somewhere real
+  const sibOf = h => (h.match(/<div class="footsibling">([\s\S]*?)<\/div>/) || [, ''])[1];
+  const sib = sibOf(read(PAGES[0]));
+  assert(/Modular Media Server/.test(sib), 'the footer links to the media server');
+  assert(/https:\/\//.test(sib), 'the sibling link is an absolute URL');
+  for (const p of PAGES) {
+    assert(sibOf(read(p)) === sib, `${p}: sibling line matches every other page`);
+  }
+
   // the footer is shared chrome, so it must be identical everywhere
   const footOf = h => (h.match(/<div class="footbase">([\s\S]*?)<\/div>/) || [, ''])[1];
   const footBase = footOf(read(PAGES[0]));
   assert(/MIT licensed/.test(footBase), 'the footer states the licence');
   for (const p of PAGES) {
     assert(footOf(read(p)) === footBase, `${p}: footer line matches every other page`);
+  }
+}
+
+/* ---------- the site must agree with the generator ---------- */
+console.log('Site vs generator');
+{
+  // CORE is the source of truth for what modules exist. Prose that restates it
+  // goes stale the moment a module is added, so nothing may restate it loosely.
+  const vm = require('vm');
+  const gen = read('generator.html');
+  const S = '/* ==MWS-CORE-START==', E = '/* ==MWS-CORE-END== */';
+  const box = { crypto: require('crypto').webcrypto, console, Buffer, TextEncoder };
+  vm.createContext(box);
+  vm.runInContext(gen.slice(gen.indexOf(S), gen.indexOf(E) + E.length) + ';__C__=CORE;', box);
+  const CORE = box.__C__;
+  const mods = CORE.MODULES.filter(m => !m.support);
+
+  const doc = read('documentation.html');
+  const entries = [...doc.matchAll(/<details class="app"><summary><b>([^<]+)<\/b>/g)].map(m => m[1]);
+  for (const m of mods) {
+    assert(entries.includes(m.name), `documentation.html documents ${m.name}`);
+  }
+  for (const e of entries) {
+    assert(mods.some(m => m.name === e), `${e} is documented and exists in the registry`);
+  }
+
+  // The home table must group modules exactly the way the generator does.
+  // Under one-per-job a wrong grouping tells the reader to choose between
+  // things they can actually run together.
+  const byJob = {};
+  mods.forEach(m => (byJob[m.job] = byJob[m.job] || []).push(m.name));
+  const contested = Object.entries(byJob).filter(([, l]) => l.length > 1);
+
+  const idx = read('index.html');
+  const stack = idx.slice(idx.indexOf('id="stack"'), idx.indexOf('id="start"'));
+  const rows = [...stack.matchAll(/<tr><td>[^<]*<\/td><td>([^<]*)<\/td><td>[^<]*<\/td><\/tr>/g)]
+    .map(m => m[1].split(',').map(x => x.trim()).filter(Boolean));
+  assert(rows.length === contested.length,
+    'the home table has one row per contested job',
+    `${rows.length} rows, ${contested.length} jobs with alternatives`);
+  for (const names of rows) {
+    const jobs = new Set(names.map(n => (mods.find(m => m.name === n) || {}).job));
+    assert(jobs.size === 1 && !jobs.has(undefined),
+      `home table row [${names.join(', ')}] is one job`, [...jobs].join(','));
+    const job = [...jobs][0];
+    if (!job) continue;
+    assert(byJob[job].length === names.length,
+      `home table row for ${job} lists every option`,
+      `lists ${names.length}, registry has ${byJob[job].length}`);
+  }
+  const written = (idx.replace(/\s+/g, ' ').match(/\b(\w+) of those jobs have more than one option/) || [])[1];
+  const words = { five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+  assert(words[written] === contested.length,
+    'the home page states the right number of contested jobs',
+    `says ${written}, actual ${contested.length}`);
+
+  // no page may hard-code a module count in prose
+  for (const p of PAGES) {
+    const m = read(p).match(/\b(twenty|thirty)[- ](one|two|three|four|five|six|seven|eight|nine)?[- ]?(entries|modules)\b/i);
+    assert(!m, `${p}: no hard-coded module count in prose`, m ? m[0] : '');
+  }
+
+  // every platform the generated scripts warn about is explained on the site
+  const st = CORE.newState();
+  CORE.applyPreset(st, 'usual');
+  const sh = CORE.buildInstallSh(st);
+  // generator.html embeds the script source, so scanning it unstripped would
+  // find every warning inside the script itself and pass vacuously.
+  const all = PAGES.map(p => stripScripts(read(p))).join('\n');
+  for (const [needle, label] of [['WSL', 'WSL'], ['/mnt/c', 'the /mnt/c warning'],
+                                 ['Docker Desktop', 'Docker Desktop'],
+                                 ['MSYS_NO_PATHCONV', 'the Git Bash workaround']]) {
+    if (!sh.includes(needle)) continue;
+    assert(all.includes(needle), `the site explains ${label}, which the script warns about`);
+  }
+
+  // absolute host paths in generated compose, allowlisted one by one
+  const ALLOWED_MOUNTS = ['/var/run/docker.sock'];
+  const every = CORE.newState();
+  CORE.applyPreset(every, 'everything');
+  every.domain = 'e.com'; every.sandboxDomain = 'p.e.com'; every.dockerSocket = true;
+  const yml = CORE.buildCompose(every);
+  for (const m of new Set([...yml.matchAll(/- "(\/[^:"]+):/g)].map(x => x[1]))) {
+    assert(ALLOWED_MOUNTS.includes(m), 'generated compose mounts no unexpected host path', m);
   }
 }
 
@@ -154,7 +247,7 @@ for (let i = 0; i < navTargets.length; i++) {
 /* ---------- module reference ---------- */
 console.log('Module reference');
 {
-  const MODULES = ['Stirling-PDF','BentoPDF','PdfDing','Paperless-ngx','Docspell',
+  const MODULES = ['Arcane','Stirling-PDF','BentoPDF','PdfDing','Paperless-ngx','Docspell',
     'BookStack','Wiki.js','Obsidian','Kiwix','Forgejo','Gogs','PairDrop',
     'PsiTransfer','Zipline','Chibisafe','CryptPad','Calligra','AppFlowy','Huly',
     'Wekan','Jitsi Meet','OpenSign','Homarr','Dashy'];
