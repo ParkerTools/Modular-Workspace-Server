@@ -22,6 +22,7 @@ are in place; the prose is not written yet. Every section body currently reads
 | `tools/generator_ui.js` | Generator DOM code, inlined into `generator.html` |
 | `tools/emit-install-scripts.js` | Writes every `install.sh` variant for shellcheck |
 | `.github/workflows/ci.yml` | Runs both suites, shellcheck, and a drift check |
+| `LICENSE` | MIT |
 | `.nojekyll` | Stops GitHub Pages running Jekyll over the files |
 
 Flat static files. Nothing needs building or installing to serve the site.
@@ -38,12 +39,15 @@ Two strings, both currently literal placeholder text:
    grep -rl 'USER.github.io/REPO' *.html | xargs sed -i 's|https://USER.github.io/REPO/|https://your-user.github.io/your-repo/|g'
    ```
 
-2. **The footer licence line**, which currently reads `PLACEHOLDER: licence and
-   attribution line.` in the `FOOTER` constant of `tools/scaffold.py` and in
-   every page.
+That is the only placeholder left.
 
-Still undecided, so not yet written: whether the site carries affiliate links
-or stores anything. If it does, add `privacy.html` and link it from the footer.
+The copyright line in `LICENSE` reads `Copyright (c) 2026 Sam`. Change the name
+if you want something else on it.
+
+No `privacy.html`, deliberately. The site carries no affiliate links, no
+analytics and no tracking, and stores nothing, so there is nothing to disclose.
+`tests/site.js` enforces that: the only external origins any page may load from
+are the two Google Fonts hosts, and adding an analytics tag fails the build.
 
 ## Reading path
 
@@ -62,7 +66,9 @@ node tests/site.js
 No dependencies. Checks, per page: one `<main id="main">`, a skip link, a
 canonical URL, a meta description, exactly one `aria-current="page"` pointing
 at itself, no duplicate ids, balanced container tags, every internal link and
-in-page anchor resolving, an identical nav link set, and a correct pager. Then
+in-page anchor resolving, an identical nav link set, an identical footer line, a
+correct pager, no leftover `PLACEHOLDER` text, and no third-party resource
+loads. Then
 every text token against every surface token in both themes at WCAG AA
 (4.5:1). `<script>` blocks are stripped before link scanning.
 
