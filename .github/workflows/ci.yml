@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Site structure, links and contrast
+        run: node tests/site.js
+
+      - name: Generator output
+        run: node tests/validate.js
+
+      - name: Regenerating the pages changes nothing
+        run: |
+          python3 tools/scaffold.py
+          if ! git diff --quiet; then
+            echo "The committed HTML does not match tools/ — run tools/scaffold.py and commit." >&2
+            git --no-pager diff --stat >&2
+            exit 1
+          fi
+
+      - name: Shellcheck every generated install.sh
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y shellcheck
+          node tools/emit-install-scripts.js /tmp/sh
+          for f in /tmp/sh/*.sh; do
+            echo "shellcheck $f"
+            shellcheck --shell=sh "$f"
+          done
