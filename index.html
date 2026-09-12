@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Modular Workspace Server · A friendly guide and Compose generator for a self-hosted work and document server</title>
+<meta name="description" content="Twenty-four containers, grouped by the job they do, with honest notes on which ones overlap and which ones you should not run together.">
+<link rel="canonical" href="https://USER.github.io/REPO/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Modular Workspace Server">
+<meta property="og:title" content="Modular Workspace Server · A friendly guide and Compose generator for a self-hosted work and document server">
+<meta property="og:description" content="Twenty-four containers, grouped by the job they do, with honest notes on which ones overlap and which ones you should not run together.">
+<meta property="og:url" content="https://USER.github.io/REPO/">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#006C87">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23006C87'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23FDFCDC'/%3E%3Ccircle cx='16' cy='16' r='2.5' fill='%23F07167'/%3E%3C/svg%3E">
+<script>
+(function(){
+  var t;
+  try{ t=localStorage.getItem('mws-theme'); }catch(e){}
+  if(!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme',t);
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,700&display=swap">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skiplink" href="#main">Skip to content</a>
+<div class="wrap"><nav><a class="brand" href="index.html">modular<span>.</span>workspace</a><div class="navlinks"><a href="index.html" aria-current="page">Home</a><a href="guide.html">Guide</a><a href="platforms.html">Platforms</a><a href="generator.html">Generator</a><a href="setup.html">App setup</a><a href="access.html">Access</a><a href="hardware.html">Hardware</a><a href="documentation.html">Docs</a><a href="faq.html">Help</a></div><div class="navtools"><button class="themebtn" id="themebtn" aria-label="Switch between light and dark"><svg class="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button><button class="navbtn" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button></div></nav></div>
+<section class="hero"><div class="wrap"><div class="kicker">Start here</div>
+<h1>Run your own documents, notes and code, on one box.</h1>
+<p>Twenty-four containers, grouped by the job they do, with honest notes on which ones overlap and which ones you should not run together.</p></div></section>
+<div class="wrap"><div class="layout">
+<aside class="toc" id="toc">
+<strong>On this page</strong>
+<a href="#what">What this is</a>
+<a href="#who">Who it is for</a>
+<a href="#stack">The stack at a glance</a>
+<a href="#start">Where to start</a>
+</aside>
+<main id="main">
+<section id="what">
+<h2>What this is</h2>
+
+<p class="lead">This site helps you run your own document server: the things
+you write in, the things you file, the things you sign, and the code you keep.
+Twenty-four containers, grouped by the job they do.</p>
+
+<p>Most self-hosting guides hand you one enormous compose file and wish you
+luck. That works right up to the first error message, at which point you have
+no idea which of the fourteen services is broken or why. This site takes the
+opposite approach. Every container is a module you can add or leave out, and
+every module entry tells you what it needs, what it costs you, and what tends
+to go wrong with it.</p>
+
+<p>Three things are true of everything here:</p>
+
+<ul>
+<li>It runs in Docker, on hardware you control.</li>
+<li>Your documents stay on your disk.</li>
+<li>You can leave. Every module in the list has an export path, and the
+<a href="faq.html#data">Help page</a> covers how to use it.</li>
+</ul>
+
+<div class="tip"><strong>You do not need all of this.</strong> A useful
+workspace server is often three containers. The list is long because people
+want different things, not because you should run the whole list.</div>
+</section>
+
+<section id="who">
+<h2>Who it is for</h2>
+
+<p>You will get on with this site if you can open a terminal, edit a text
+file, and are willing to read an error message rather than delete everything
+and start again. You do not need to know Docker already. The
+<a href="guide.html">Guide</a> covers what you need before anything else
+makes sense.</p>
+
+<p>You will find this frustrating if you want a one-click appliance. Several
+of these applications need a database, a reverse proxy, and a real domain
+name before they will work properly, and no amount of friendly writing
+changes that. Where an app is genuinely hard to run, this site says so
+instead of pretending.</p>
+
+<div class="card teal">
+<p><strong>What this costs.</strong> Nothing, if you already own a machine
+that stays on. If you do not, the cheapest honest answer is usually a
+second-hand mini PC rather than a VPS, because the storage is where the money
+goes and rented storage is expensive. <a href="platforms.html">Platforms</a>
+works through that comparison with numbers.</p>
+</div>
+</section>
+
+<section id="stack">
+<h2>The stack at a glance</h2>
+
+<p>The modules fall into seven jobs. Within a job, the options are genuine
+alternatives, so you generally want one of each rather than all of them.</p>
+
+<div class="tbl">
+<table>
+<thead><tr><th>Job</th><th>Options</th><th>Most people want</th></tr></thead>
+<tbody>
+<tr><td>PDF tools</td><td>Stirling-PDF, BentoPDF</td><td>Stirling-PDF, unless you want zero server-side processing</td></tr>
+<tr><td>Document archive</td><td>Paperless-ngx, Docspell</td><td>Paperless-ngx</td></tr>
+<tr><td>Reading library</td><td>PdfDing</td><td>Only if you read long PDFs across devices</td></tr>
+<tr><td>Notes and wikis</td><td>BookStack, Wiki.js, Obsidian, Kiwix</td><td>BookStack</td></tr>
+<tr><td>Code forge</td><td>Forgejo, Gogs</td><td>Forgejo</td></tr>
+<tr><td>File transfer</td><td>PairDrop, PsiTransfer, Zipline, Chibisafe</td><td>PairDrop for the house, PsiTransfer for links</td></tr>
+<tr><td>Dashboard</td><td>Homarr, Dashy</td><td>Either. Pick by whether you want YAML or a GUI</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>The rest sit on their own: OpenSign for signatures, Jitsi Meet for calls,
+Wekan for boards, CryptPad for encrypted collaborative editing, and AppFlowy
+and Huly for full Notion-style workspaces. Those last two are much larger
+than everything else here, and the <a href="hardware.html#ram">Hardware
+page</a> explains why they get their own warning.</p>
+</section>
+
+<section id="start">
+<h2>Where to start</h2>
+
+<ol class="steps">
+<li><strong>Read the <a href="guide.html">Guide</a>.</strong> Volumes,
+networks and reverse proxies. Twenty minutes, and everything afterwards
+assumes it.</li>
+<li><strong>Pick a box.</strong> <a href="platforms.html">Platforms</a>
+covers NAS, mini PC, VPS and Raspberry Pi, and what each can actually
+carry.</li>
+<li><strong>Build a compose file.</strong> The
+<a href="generator.html">Generator</a> resolves dependencies, generates
+secrets in your browser, and writes the files for you.</li>
+<li><strong>Set the apps up.</strong> <a href="setup.html">App setup</a> has
+the first-run steps and the specific place each app trips people up.</li>
+<li><strong>Decide how you reach it.</strong> <a href="access.html">Access</a>
+covers proxies, VPNs and tunnels, and lists the containers that should never
+be published to the internet.</li>
+</ol>
+
+<div class="warning"><strong>Read the Access page before you open anything to
+the internet.</strong> Two of the applications in this list ship with no
+authentication at all and give anyone who reaches them a root shell inside
+the container. They are still worth running. They are not worth publishing.
+</div>
+</section>
+
+</main>
+</div></div>
+<div class="wrap"><div class="pager">
+
+<a class="next" href="guide.html"><span class="dir">Next →</span><span class="ttl">Guide</span><span class="sub">Docker, Compose and the concepts the rest of the site assumes</span></a>
+</div></div>
+<footer class="sitefoot"><div class="wrap">
+<div class="footgrid">
+<div class="footbrand"><div class="fb">modular<span style="color:var(--coral)">.</span>workspace</div>
+<p>A friendly guide and Compose generator for a self-hosted work and document server.</p></div>
+<div class="footcol"><b>Getting started</b><a href="index.html">Home</a><a href="guide.html">Guide</a><a href="platforms.html">Platforms</a></div>
+<div class="footcol"><b>Building</b><a href="generator.html">Generator</a><a href="setup.html">App setup</a><a href="access.html">Access</a></div>
+<div class="footcol"><b>Reference</b><a href="hardware.html">Hardware</a><a href="documentation.html">Docs</a><a href="faq.html">Help</a></div>
+</div>
+<div class="footbase">Every module entry is checked against upstream documentation before it is published. Where something could not be verified, the page says so. · PLACEHOLDER: licence and attribution line.</div>
+</div></footer>
+<script src="assets/site.js"></script>
+</body></html>

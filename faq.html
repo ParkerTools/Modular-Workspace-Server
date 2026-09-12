@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Help · Modular Workspace Server</title>
+<meta name="description" content="Container running but app wedged, permission errors, port clashes, and the upgrade traps specific to these apps.">
+<link rel="canonical" href="https://USER.github.io/REPO/faq.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Modular Workspace Server">
+<meta property="og:title" content="Help · Modular Workspace Server">
+<meta property="og:description" content="Container running but app wedged, permission errors, port clashes, and the upgrade traps specific to these apps.">
+<meta property="og:url" content="https://USER.github.io/REPO/faq.html">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#006C87">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23006C87'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23FDFCDC'/%3E%3Ccircle cx='16' cy='16' r='2.5' fill='%23F07167'/%3E%3C/svg%3E">
+<script>
+(function(){
+  var t;
+  try{ t=localStorage.getItem('mws-theme'); }catch(e){}
+  if(!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme',t);
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,700&display=swap">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skiplink" href="#main">Skip to content</a>
+<div class="wrap"><nav><a class="brand" href="index.html">modular<span>.</span>workspace</a><div class="navlinks"><a href="index.html">Home</a><a href="guide.html">Guide</a><a href="platforms.html">Platforms</a><a href="generator.html">Generator</a><a href="setup.html">App setup</a><a href="access.html">Access</a><a href="hardware.html">Hardware</a><a href="documentation.html">Docs</a><a href="faq.html" aria-current="page">Help</a></div><div class="navtools"><button class="themebtn" id="themebtn" aria-label="Switch between light and dark"><svg class="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button><button class="navbtn" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button></div></nav></div>
+<section class="hero"><div class="wrap"><div class="kicker">When it breaks</div>
+<h1>The things that go wrong, and what to do about them.</h1>
+<p>Container running but app wedged, permission errors, port clashes, and the upgrade traps specific to these apps.</p></div></section>
+<div class="wrap"><div class="layout">
+<aside class="toc" id="toc">
+<strong>On this page</strong>
+<a href="#first">Check these first</a>
+<a href="#perms">Permissions</a>
+<a href="#ports">Port clashes</a>
+<a href="#upgrades">Upgrade traps</a>
+<a href="#data">Getting your data back out</a>
+</aside>
+<main id="main">
+<section id="first">
+<h2>Check these first</h2>
+
+<p class="lead">Four checks, in this order. They resolve most problems before
+you have to think hard about any of them.</p>
+
+<ol class="steps">
+<li><strong>Read the logs.</strong>
+<code>docker compose logs -f servicename</code>. The answer is in there far
+more often than people expect, and reading it takes less time than
+guessing.</li>
+<li><strong>Check the container is not just pretending.</strong>
+<code>docker compose ps</code> showing <code>Up</code> only means the process
+started. A container can be running while the application inside it is
+wedged, waiting on a database that never came up.</li>
+<li><strong>Check what it depends on.</strong> If an app needs PostgreSQL or
+Redis, look at those first. An app that cannot reach its database usually
+reports something vague about its own startup rather than naming the
+database.</li>
+<li><strong>Check the URL variable.</strong> Half of all "it loads but
+nothing works" reports are an app that does not know its own address.
+APP_URL, PAPERLESS_URL, ROOT_URL, PUBLIC_URL, SERVER_URL. Different name in
+every app, same problem.</li>
+</ol>
+
+<div class="tip"><strong>Restarting is not diagnosis.</strong> It fixes
+transient startup ordering and nothing else. If a restart fixes it twice, the
+real problem is that something starts before its dependency is ready, and the
+fix is a healthcheck rather than a habit.</div>
+</section>
+
+<section id="perms">
+<h2>Permissions</h2>
+
+<p>Permission errors are the most common first-run failure, and the error
+message rarely says "permissions".</p>
+
+<p>What you usually see instead: the app starts and immediately exits, or it
+starts and reports that it cannot write to a directory, or it comes up with
+an empty database every restart.</p>
+
+<p>The cause is a mismatch between the user inside the container and the
+owner of your bind-mount directory. Two fixes, depending on the image:</p>
+
+<ul>
+<li><strong>Images with PUID and PGID</strong>, which includes everything from
+LinuxServer: set them to your own IDs from <code>id -u</code> and
+<code>id -g</code>.</li>
+<li><strong>Images with a fixed internal user</strong>: change the directory
+to match. PsiTransfer is the clearest case on this site. Upstream requires
+its data volume to be owned by UID 1000, so
+<code>chown -R 1000 ./data</code> before the first start.</li>
+</ul>
+
+<div class="warning"><strong>Create bind-mount directories yourself.</strong>
+If Docker creates a missing directory, it creates it owned by root, and the
+app then cannot write to it. Chibisafe documents this explicitly: make the
+database, uploads and logs directories before the first start.</div>
+</section>
+
+<section id="ports">
+<h2>Port clashes</h2>
+
+<p>Two services wanting the same host port will not start, and the error
+names the port rather than the app, which is why it reads as mysterious.</p>
+
+<p>The clash you will hit is port 3000. On this site alone, Forgejo, Gogs,
+CryptPad, PairDrop, PsiTransfer, Zipline and OpenSign's client all default to
+it. Port 8080 is the second most crowded.</p>
+
+<p>Find out what is holding a port with <code>docker compose ps</code>, or on
+the host with <code>ss -tulpn | grep 3000</code>.</p>
+
+<div class="tip"><strong>Change the host side, not the container
+side.</strong> In <code>"4000:8080"</code> the left number is yours to pick
+freely. The right number is what the application listens on inside the
+container, and changing it usually requires also changing a configuration
+variable. The <a href="generator.html">Generator</a> assigns unique host
+ports so this does not come up.</div>
+
+<p>Remember that other containers do not use your host port. They reach the
+service on its container port by service name. Publishing a port is for you,
+not for them, and a database needs no published port at all.</p>
+</section>
+
+<section id="upgrades">
+<h2>Upgrade traps</h2>
+
+<p>The generic advice is on the <a href="guide.html#updates">Guide</a>: pin
+major versions, read release notes, take a backup. These are the traps
+specific to modules on this site.</p>
+
+<div class="tbl">
+<table>
+<thead><tr><th>Module</th><th>What bites</th></tr></thead>
+<tbody>
+<tr><td>Wiki.js</td><td>Pulling <code>latest</code> moves you toward version 3, which upstream says is an unstable beta not for production. Pin <code>:2</code></td></tr>
+<tr><td>Dashy</td><td>v3 moved config to <code>/app/user-data</code> and the port from 80 to 8080. v4 removed the <code>build-and-start</code> entrypoint</td></tr>
+<tr><td>Zipline</td><td>v3 to v4 is a rewrite with no in-place upgrade. Variables were renamed: CORE_DATABASE_URL to DATABASE_URL, CORE_HOST to CORE_HOSTNAME</td></tr>
+<tr><td>Huly</td><td>0.6 to 0.7 needs upstream's dedicated migration steps, not a pull</td></tr>
+<tr><td>Homarr</td><td>The v1 rewrite required manual reconfiguration</td></tr>
+<tr><td>PdfDing</td><td>The GitHub repo is archived. Development moved to Codeberg</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="warning"><strong>Automatic updaters are a poor fit for this
+stack.</strong> Watchtower and similar tools will happily pull a major
+version overnight and migrate a database you have no backup of. Every entry
+in the table above is something an unattended update would have done to you
+without asking.</div>
+</section>
+
+<section id="data">
+<h2>Getting your data back out</h2>
+
+<p>Every module on this site has a way out. Knowing which one, before you
+need it, is the difference between switching tools and being stuck.</p>
+
+<div class="fields"><dl>
+<dt>Paperless-ngx</dt><dd>Document export, which writes originals plus metadata to the export volume</dd>
+<dt>Docspell</dt><dd>Documents remain in its storage, with a documented API for bulk retrieval</dd>
+<dt>BookStack and Wiki.js</dt><dd>Content export. Wiki.js can also keep everything mirrored to Git continuously</dd>
+<dt>Forgejo and Gogs</dt><dd>Git repositories are already portable. Clone them. Issues need the API</dd>
+<dt>Wekan</dt><dd>Board export as JSON, attachments included</dd>
+<dt>PdfDing</dt><dd>The PDFs are files on disk in your media directory</dd>
+<dt>Kiwix</dt><dd>The ZIM files are yours already</dd>
+<dt>CryptPad</dt><dd>Export per document. The server cannot do it for you, by design</dd>
+</dl></div>
+
+<div class="warning"><strong>CryptPad is the one to think about
+early.</strong> Its encryption means the server genuinely cannot recover your
+documents if you lose access to them. That is the feature. It also means
+there is no administrator who can help, including you.</div>
+
+<p>Test one export while everything is working. An export path you have never
+run is a claim, not a plan.</p>
+</section>
+
+</main>
+</div></div>
+<div class="wrap"><div class="pager">
+<a class="prev" href="documentation.html"><span class="dir">← Previous</span><span class="ttl">Documentation</span><span class="sub">Per-module reference: images, ports, variables, volumes</span></a>
+
+</div></div>
+<footer class="sitefoot"><div class="wrap">
+<div class="footgrid">
+<div class="footbrand"><div class="fb">modular<span style="color:var(--coral)">.</span>workspace</div>
+<p>A friendly guide and Compose generator for a self-hosted work and document server.</p></div>
+<div class="footcol"><b>Getting started</b><a href="index.html">Home</a><a href="guide.html">Guide</a><a href="platforms.html">Platforms</a></div>
+<div class="footcol"><b>Building</b><a href="generator.html">Generator</a><a href="setup.html">App setup</a><a href="access.html">Access</a></div>
+<div class="footcol"><b>Reference</b><a href="hardware.html">Hardware</a><a href="documentation.html">Docs</a><a href="faq.html">Help</a></div>
+</div>
+<div class="footbase">Every module entry is checked against upstream documentation before it is published. Where something could not be verified, the page says so. · PLACEHOLDER: licence and attribution line.</div>
+</div></footer>
+<script src="assets/site.js"></script>
+</body></html>

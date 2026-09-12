@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Guide · Modular Workspace Server</title>
+<meta name="description" content="Docker, Compose, volumes, networks and reverse proxies, explained once so the rest of the site can assume them.">
+<link rel="canonical" href="https://USER.github.io/REPO/guide.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Modular Workspace Server">
+<meta property="og:title" content="Guide · Modular Workspace Server">
+<meta property="og:description" content="Docker, Compose, volumes, networks and reverse proxies, explained once so the rest of the site can assume them.">
+<meta property="og:url" content="https://USER.github.io/REPO/guide.html">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#006C87">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23006C87'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23FDFCDC'/%3E%3Ccircle cx='16' cy='16' r='2.5' fill='%23F07167'/%3E%3C/svg%3E">
+<script>
+(function(){
+  var t;
+  try{ t=localStorage.getItem('mws-theme'); }catch(e){}
+  if(!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme',t);
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,700&display=swap">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skiplink" href="#main">Skip to content</a>
+<div class="wrap"><nav><a class="brand" href="index.html">modular<span>.</span>workspace</a><div class="navlinks"><a href="index.html">Home</a><a href="guide.html" aria-current="page">Guide</a><a href="platforms.html">Platforms</a><a href="generator.html">Generator</a><a href="setup.html">App setup</a><a href="access.html">Access</a><a href="hardware.html">Hardware</a><a href="documentation.html">Docs</a><a href="faq.html">Help</a></div><div class="navtools"><button class="themebtn" id="themebtn" aria-label="Switch between light and dark"><svg class="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button><button class="navbtn" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button></div></nav></div>
+<section class="hero"><div class="wrap"><div class="kicker">Foundations</div>
+<h1>The parts you need before any of this runs.</h1>
+<p>Docker, Compose, volumes, networks and reverse proxies, explained once so the rest of the site can assume them.</p></div></section>
+<div class="wrap"><div class="layout">
+<aside class="toc" id="toc">
+<strong>On this page</strong>
+<a href="#docker">Docker and Compose</a>
+<a href="#volumes">Volumes and where data lives</a>
+<a href="#networks">Networks and container names</a>
+<a href="#proxy">Reverse proxies</a>
+<a href="#updates">Updating without breaking things</a>
+</aside>
+<main id="main">
+<section id="docker">
+<h2>Docker and Compose</h2>
+
+<p class="lead">Docker packages an application with everything it needs, so
+you run one command instead of installing a language runtime, a database
+driver and six libraries. Compose describes a set of those containers in one
+file so they start together.</p>
+
+<p>You need two things installed: Docker Engine and the Compose plugin. On a
+modern install they arrive together and the command is <code>docker
+compose</code>, with a space. If your machine only has
+<code>docker-compose</code> with a hyphen, that is the older standalone
+version. It mostly works, but it predates some syntax used on this site, and
+upgrading is easier than working around it.</p>
+
+<p>A compose file is a list of services. Each service has an image, and
+usually some combination of ports, volumes and environment variables:</p>
+
+<pre>services:
+  bookstack:
+    image: lscr.io/linuxserver/bookstack:latest
+    ports:
+      - "6875:80"
+    volumes:
+      - ./bookstack/config:/config
+    environment:
+      - APP_URL=https://wiki.example.com
+    restart: unless-stopped</pre>
+
+<p>Four commands cover almost everything:</p>
+
+<div class="fields"><dl>
+<dt>docker compose up -d</dt><dd>Start everything, in the background</dd>
+<dt>docker compose ps</dt><dd>What is running, and on which ports</dd>
+<dt>docker compose logs -f name</dt><dd>Follow one service's output. This is where the answer usually is</dd>
+<dt>docker compose down</dt><dd>Stop and remove the containers. Volumes survive</dd>
+</dl></div>
+
+<div class="warning"><strong>This is the detail people get wrong.</strong> A
+container can be running while the application inside it is wedged.
+<code>docker compose ps</code> showing <code>Up</code> means the process
+started, not that the app is healthy. If a page will not load, go straight to
+<code>logs -f</code> rather than restarting and hoping.</div>
+</section>
+
+<section id="volumes">
+<h2>Volumes and where data lives</h2>
+
+<p>A container's own filesystem is disposable. Anything you want to survive an
+update has to live in a volume. Get this wrong and you will lose your
+documents the first time you pull a new image.</p>
+
+<p>There are two kinds, and the difference matters more than most guides
+admit.</p>
+
+<div class="tbl">
+<table>
+<thead><tr><th>Kind</th><th>Looks like</th><th>Lives</th></tr></thead>
+<tbody>
+<tr><td>Bind mount</td><td><code>./paperless/data:/usr/src/paperless/data</code></td><td>In a folder next to your compose file, where you can see it</td></tr>
+<tr><td>Named volume</td><td><code>pgdata:/var/lib/postgresql/data</code></td><td>Somewhere under Docker's own directory, managed for you</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>This site uses bind mounts for anything you might want to open, copy or
+back up by hand, which is most application data. It uses named volumes for
+database storage, because databases care about filesystem behaviour and
+letting Docker manage that avoids a class of permission problem.</p>
+
+<p>Permissions are the other half. Many images run as a non-root user and let
+you choose which one with <code>PUID</code> and <code>PGID</code>. Set them to
+your own user, which you can find with <code>id -u</code> and
+<code>id -g</code>. If an app starts and then immediately reports that it
+cannot write to its data directory, this is almost always why.</p>
+
+<div class="tip"><strong>Back up the folder, not the container.</strong> If
+your compose file and your bind-mount folders are backed up, you can rebuild
+the whole stack on a new machine. Databases want a proper dump rather than a
+file copy while running, which the <a href="hardware.html#backups">Hardware
+page</a> covers.</div>
+</section>
+
+<section id="networks">
+<h2>Networks and container names</h2>
+
+<p>Containers in the same compose project can reach each other by service
+name. That is why a Paperless service can point at
+<code>redis://broker:6379</code> without knowing any IP address. The name
+comes from the key in the compose file, not the image and not the container
+name.</p>
+
+<p>Two consequences worth internalising:</p>
+
+<ul>
+<li><strong>Internal traffic uses the container port.</strong> If a service
+publishes <code>"8000:8000"</code>, other containers still talk to it on
+8000, not on whatever host port you chose. A published port is for you, not
+for them.</li>
+<li><strong>A service does not need a published port at all.</strong>
+Databases in particular should not have one. If only the application talks to
+Postgres, leave <code>ports:</code> off the database entirely and it becomes
+unreachable from your network.</li>
+</ul>
+
+<p>Host ports are a finite resource and clashes are the most common first-run
+failure. Two services both wanting 3000 will not start, and the error names
+the port rather than the app, which is why it confuses people. Forgejo, Gogs
+and CryptPad all default to 3000. The <a href="generator.html">Generator</a>
+assigns unique host ports for exactly this reason.</p>
+</section>
+
+<section id="proxy">
+<h2>Reverse proxies</h2>
+
+<p>A reverse proxy sits in front of your containers and routes by hostname, so
+<code>wiki.example.com</code> and <code>files.example.com</code> both arrive
+on port 443 and get sent to different services. It also handles TLS
+certificates.</p>
+
+<p>You want one as soon as you have more than about three services, for three
+reasons: you stop memorising port numbers, you get HTTPS, and several of the
+applications here simply do not work correctly without it. CryptPad needs
+it. Jitsi needs it. Anything with WebSockets needs it configured to pass
+those through.</p>
+
+<div class="tbl">
+<table>
+<thead><tr><th>Proxy</th><th>Config style</th><th>Suits</th></tr></thead>
+<tbody>
+<tr><td>Caddy</td><td>A few lines per site, certificates automatic</td><td>Most people, most of the time</td></tr>
+<tr><td>Traefik</td><td>Labels on each container, discovered automatically</td><td>Stacks that change often</td></tr>
+<tr><td>Nginx Proxy Manager</td><td>Web UI</td><td>People who would rather click than edit files</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Start with Caddy unless you have a reason not to. A working site block is
+two lines, and it gets certificates without you configuring anything.</p>
+
+<div class="warning"><strong>Putting a proxy in front of something does not
+make it safe to publish.</strong> A proxy gives you TLS and tidy hostnames. It
+does not add authentication, and it does not fix an app that has none.
+<a href="access.html#never">Access</a> lists what should stay off the
+internet regardless of how well your proxy is configured.</div>
+</section>
+
+<section id="updates">
+<h2>Updating without breaking things</h2>
+
+<p>Updating is pulling a newer image and recreating the container. The data in
+your volumes stays put.</p>
+
+<pre>docker compose pull
+docker compose up -d</pre>
+
+<p>The risk is not the command, it is the tag. <code>latest</code> means
+whatever the maintainer pushed most recently, including the next major
+version with a changed database schema. That is how people wake up to a
+migrated database and an app that will not start.</p>
+
+<div class="warning"><strong>Pin the major version on anything holding your
+data.</strong> Wiki.js is the clearest example in this list. Its version 3
+documentation states plainly that it is an unstable beta and should not be
+installed in production, so the tag to run is
+<code>ghcr.io/requarks/wiki:2</code>. Pulling <code>latest</code> there
+changes the schema underneath a running instance.</div>
+
+<p>Two more upgrade traps specific to modules on this site:</p>
+
+<ul>
+<li><strong>Dashy 4.0.0</strong> removed the <code>build-and-start</code>
+entrypoint. Compose files that override the command crash on start until
+changed to <code>node server.js</code>.</li>
+<li><strong>Huly 0.6 to 0.7</strong> is not an in-place upgrade. The project
+publishes dedicated migration steps and you have to follow them.</li>
+</ul>
+
+<p>Before any update on a stack that matters, take a backup and read the
+release notes for the app you are updating. Watchtower and similar tools that
+update automatically are a bad fit for this kind of stack, because an
+unattended major version bump is exactly the failure you cannot recover from
+quickly.</p>
+</section>
+
+</main>
+</div></div>
+<div class="wrap"><div class="pager">
+<a class="prev" href="index.html"><span class="dir">← Previous</span><span class="ttl">A self-hosted workspace you can actually maintain</span><span class="sub">What this project is and who it is for</span></a>
+<a class="next" href="platforms.html"><span class="dir">Next →</span><span class="ttl">Platforms</span><span class="sub">NAS, mini PC, VPS: what each can carry</span></a>
+</div></div>
+<footer class="sitefoot"><div class="wrap">
+<div class="footgrid">
+<div class="footbrand"><div class="fb">modular<span style="color:var(--coral)">.</span>workspace</div>
+<p>A friendly guide and Compose generator for a self-hosted work and document server.</p></div>
+<div class="footcol"><b>Getting started</b><a href="index.html">Home</a><a href="guide.html">Guide</a><a href="platforms.html">Platforms</a></div>
+<div class="footcol"><b>Building</b><a href="generator.html">Generator</a><a href="setup.html">App setup</a><a href="access.html">Access</a></div>
+<div class="footcol"><b>Reference</b><a href="hardware.html">Hardware</a><a href="documentation.html">Docs</a><a href="faq.html">Help</a></div>
+</div>
+<div class="footbase">Every module entry is checked against upstream documentation before it is published. Where something could not be verified, the page says so. · PLACEHOLDER: licence and attribution line.</div>
+</div></footer>
+<script src="assets/site.js"></script>
+</body></html>
